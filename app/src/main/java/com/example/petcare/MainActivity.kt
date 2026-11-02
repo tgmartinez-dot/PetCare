@@ -1,39 +1,46 @@
 package com.example.petcare
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.petcare.model.Mascota
 import com.example.petcare.model.Reporte
-import com.example.petcare.viewmodel.PetCareViewModel
+import com.example.petcare.model.Usuario
 
 private val Morado = Color(0xFF813D91)
+private val Fondo = Color(0xFFFFFBF5)
 private val Rosa = Color(0xFFF3E4F4)
-private val Fondo = Color(0xFFFFFBFF)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,7 +57,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PetCareApp() {
     var pantalla by remember { mutableStateOf("inicio") }
-    val petCareViewModel: PetCareViewModel = viewModel()
+
+    var nombreUsuario by remember { mutableStateOf("") }
+    var correoUsuario by remember { mutableStateOf("") }
+    var telefonoUsuario by remember { mutableStateOf("") }
+
+    val reportes = remember { mutableStateListOf<Reporte>() }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -59,19 +71,30 @@ fun PetCareApp() {
         when (pantalla) {
             "inicio" -> PantallaInicio(
                 onBuscar = { pantalla = "buscar" },
-                onReportar = { pantalla = "reportar" }
+                onReportar = { pantalla = "reportar" },
+                onPerfil = { pantalla = "perfil" }
             )
 
             "buscar" -> PantallaBuscar(
-                reportes = petCareViewModel.reportes,
+                reportes = reportes,
                 onRegresar = { pantalla = "inicio" }
             )
 
             "reportar" -> PantallaReportar(
                 onPublicar = { reporte ->
-                    petCareViewModel.agregarReporte(reporte)
+                    reportes.add(reporte)
                     pantalla = "buscar"
                 },
+                onRegresar = { pantalla = "inicio" }
+            )
+
+            "perfil" -> PantallaPerfil(
+                nombre = nombreUsuario,
+                correo = correoUsuario,
+                telefono = telefonoUsuario,
+                onNombreChange = { nombreUsuario = it },
+                onCorreoChange = { correoUsuario = it },
+                onTelefonoChange = { telefonoUsuario = it },
                 onRegresar = { pantalla = "inicio" }
             )
         }
@@ -81,48 +104,47 @@ fun PetCareApp() {
 @Composable
 fun PantallaInicio(
     onBuscar: () -> Unit,
-    onReportar: () -> Unit
+    onReportar: () -> Unit,
+    onPerfil: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = "🐾 PetCare",
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Bold,
-            color = Morado
+            color = Morado,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold
         )
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Encuentra a tu mejor amigo",
-            fontSize = 20.sp,
-            color = Color.DarkGray
+            text = "Ayudemos a las mascotas a volver a casa."
         )
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onBuscar,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Morado)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Buscar mascota")
+            Text("Buscar mascotas")
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = onReportar,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Morado)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Reportar mascota")
+        }
+
+        OutlinedButton(
+            onClick = onPerfil,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Mi perfil")
         }
     }
 }
@@ -140,12 +162,13 @@ fun PantallaBuscar(
         val coincideTexto =
             mascota.nombre.contains(busqueda, ignoreCase = true) ||
                     mascota.ubicacion.contains(busqueda, ignoreCase = true) ||
-                    mascota.descripcion.contains(busqueda, ignoreCase = true)
+                    mascota.raza.contains(busqueda, ignoreCase = true) ||
+                    mascota.especie.contains(busqueda, ignoreCase = true)
 
-        val coincideEstado =
+        val coincideFiltro =
             filtro == "Todos" || reporte.tipo == filtro
 
-        coincideTexto && coincideEstado
+        coincideTexto && coincideFiltro
     }
 
     Column(
@@ -154,241 +177,52 @@ fun PantallaBuscar(
             .padding(20.dp)
     ) {
         Text(
-            text = "🐾 PetCare",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
-            color = Morado
-        )
-
-        Text(text = "Buscar mascotas", fontSize = 22.sp)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = busqueda,
-            onValueChange = { busqueda = it },
-            label = { Text("Zona o descripción") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            text = "Buscar mascotas",
+            color = Morado,
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        OutlinedTextField(
+            value = busqueda,
+            onValueChange = { busqueda = it },
+            label = { Text("Nombre, raza o ubicación") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Todos", "Perdido", "Encontrado").forEach { opcion ->
-                FilterChip(
-                    selected = filtro == opcion,
-                    onClick = { filtro = opcion },
-                    label = {
-                        Text(
-                            when (opcion) {
-                                "Perdido" -> "Perdidos"
-                                "Encontrado" -> "Encontrados"
-                                else -> "Todos"
-                            }
-                        )
+                if (filtro == opcion) {
+                    Button(onClick = { filtro = opcion }) {
+                        Text(opcion)
                     }
-                )
+                } else {
+                    OutlinedButton(onClick = { filtro = opcion }) {
+                        Text(opcion)
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         if (resultados.isEmpty()) {
-            Text("No se encontraron mascotas.")
+            Text("No hay reportes que coincidan con la búsqueda.")
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(resultados) { reporte ->
-                    TarjetaMascota(reporte.mascota, reporte.tipo)
+                    TarjetaReporte(reporte)
                 }
             }
         }
 
-        Button(
-            onClick = onRegresar,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Morado)
-        ) {
-            Text("Regresar al inicio")
-        }
-    }
-}
-
-@Composable
-fun PantallaReportar(
-    onPublicar: (Reporte) -> Unit,
-    onRegresar: () -> Unit
-) {
-    var nombre by remember { mutableStateOf("") }
-    var ubicacion by remember { mutableStateOf("") }
-    var descripcion by remember { mutableStateOf("") }
-    var telefono by remember { mutableStateOf("") }
-    var estado by remember { mutableStateOf("Perdido") }
-    var foto by remember { mutableStateOf<Uri?>(null) }
-    var mensaje by remember { mutableStateOf("") }
-
-    val selectorFoto = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        foto = uri
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "🐾 Nuevo reporte",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = Morado
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilterChip(
-                selected = estado == "Perdido",
-                onClick = { estado = "Perdido" },
-                label = { Text("Mascota perdida") }
-            )
-
-            FilterChip(
-                selected = estado == "Encontrado",
-                onClick = { estado = "Encontrado" },
-                label = { Text("Mascota encontrada") }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = nombre,
-            onValueChange = { nombre = it },
-            label = { Text("Nombre de la mascota") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = ubicacion,
-            onValueChange = { ubicacion = it },
-            label = { Text("Última ubicación") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = descripcion,
-            onValueChange = { descripcion = it },
-            label = { Text("Características de la mascota") },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = telefono,
-            onValueChange = { telefono = it },
-            label = { Text("Teléfono de WhatsApp") },
-            supportingText = {
-                Text("Incluye el código de país; México es 52.")
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = { selectorFoto.launch("image/*") },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Morado)
-        ) {
-            Text("📷 Agregar fotografía")
-        }
-
-        if (foto != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AsyncImage(
-                model = foto,
-                contentDescription = "Fotografía de la mascota",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Crop
-            )
-
-            TextButton(onClick = { foto = null }) {
-                Text("Quitar fotografía")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                val telefonoLimpio = telefono.filter { it.isDigit() }
-
-                if (
-                    nombre.isNotBlank() &&
-                    ubicacion.isNotBlank() &&
-                    descripcion.isNotBlank() &&
-                    telefonoLimpio.length >= 10
-                ) {
-                    val mascota = Mascota(
-                        nombre = nombre.trim(),
-                        ubicacion = ubicacion.trim(),
-                        descripcion = descripcion.trim(),
-                        estado = estado,
-                        foto = foto?.toString() ?: "",
-                        telefono = telefonoLimpio
-                    )
-
-                    val reporte = Reporte(
-                        id = System.currentTimeMillis().toInt(),
-                        mascota = mascota,
-                        tipo = estado,
-                        descripcion = descripcion.trim(),
-                        fechaPublicacion = ""
-                    )
-
-                    onPublicar(reporte)
-                } else {
-                    mensaje = "Completa los campos y verifica el teléfono."
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Morado)
-        ) {
-            Text("Publicar reporte")
-        }
-
-        if (mensaje.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = mensaje, color = Morado)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onRegresar,
@@ -400,83 +234,242 @@ fun PantallaReportar(
 }
 
 @Composable
-fun TarjetaMascota(
-    mascota: Mascota,
-    estadoReporte: String
-) {
-    val contexto = LocalContext.current
+fun TarjetaReporte(reporte: Reporte) {
+    val mascota = reporte.mascota
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Rosa)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            if (mascota.foto.isNotBlank()) {
-                AsyncImage(
-                    model = Uri.parse(mascota.foto),
-                    contentDescription = "Fotografía de ${mascota.nombre}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "🐾 Sin fotografía", color = Morado)
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(
+                text = mascota.nombre,
+                color = Morado,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text("Estado: ${reporte.tipo}")
+            Text("Especie: ${mascota.especie}")
+            Text("Raza: ${mascota.raza}")
+            Text("Edad: ${mascota.edad}")
+            Text("Tamaño: ${mascota.tamano}")
+            Text("Ubicación: ${mascota.ubicacion}")
+            Text("Características: ${mascota.caracteristicas}")
+            Text("Descripción: ${reporte.descripcion}")
+            Text("Fecha: ${reporte.fechaPublicacion}")
+
+            if (mascota.telefono.isNotBlank()) {
+                Text("Teléfono de contacto: ${mascota.telefono}")
+            }
+        }
+    }
+}
+
+@Composable
+fun PantallaReportar(
+    onPublicar: (Reporte) -> Unit,
+    onRegresar: () -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var especie by remember { mutableStateOf("") }
+    var raza by remember { mutableStateOf("") }
+    var edad by remember { mutableStateOf("") }
+    var tamano by remember { mutableStateOf("") }
+    var caracteristicas by remember { mutableStateOf("") }
+    var ubicacion by remember { mutableStateOf("") }
+    var estado by remember { mutableStateOf("Perdido") }
+    var descripcion by remember { mutableStateOf("") }
+    var telefono by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp)
+    ) {
+        Text(
+            text = "Reportar mascota",
+            color = Morado,
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (estado == "Perdido") {
+                        Button(onClick = { estado = "Perdido" }) {
+                            Text("Perdido")
+                        }
+                    } else {
+                        OutlinedButton(onClick = { estado = "Perdido" }) {
+                            Text("Perdido")
+                        }
+                    }
+
+                    if (estado == "Encontrado") {
+                        Button(onClick = { estado = "Encontrado" }) {
+                            Text("Encontrado")
+                        }
+                    } else {
+                        OutlinedButton(onClick = { estado = "Encontrado" }) {
+                            Text("Encontrado")
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = mascota.nombre,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Morado
-            )
-
-            Text("📍 ${mascota.ubicacion}")
-            Text("Estado: $estadoReporte")
-            Text(mascota.descripcion)
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Button(
-                onClick = {
-                    val numero = mascota.telefono.filter { it.isDigit() }
-                    val texto = if (estadoReporte == "Perdido") {
-                        "Hola, vi el reporte de ${mascota.nombre} en PetCare y quiero ayudar."
-                    } else {
-                        "Hola, vi tu reporte de una mascota encontrada en PetCare. Quisiera más información."
-                    }
-
-                    val enlace = Uri.parse(
-                        "https://wa.me/$numero?text=${Uri.encode(texto)}"
-                    )
-
-                    contexto.startActivity(Intent(Intent.ACTION_VIEW, enlace))
-                },
-                enabled = mascota.telefono.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Morado)
-            ) {
-                Text(
-                    if (estadoReporte == "Perdido") {
-                        "Contactar por WhatsApp"
-                    } else {
-                        "Reportar avistamiento"
-                    }
-                )
+            item {
+                CampoTexto("Nombre de la mascota", nombre) { nombre = it }
             }
+            item {
+                CampoTexto("Especie", especie) { especie = it }
+            }
+            item {
+                CampoTexto("Raza", raza) { raza = it }
+            }
+            item {
+                CampoTexto("Edad", edad) { edad = it }
+            }
+            item {
+                CampoTexto("Tamaño", tamano) { tamano = it }
+            }
+            item {
+                CampoTexto("Características", caracteristicas) { caracteristicas = it }
+            }
+            item {
+                CampoTexto("Ubicación", ubicacion) { ubicacion = it }
+            }
+            item {
+                CampoTexto("Descripción", descripcion) { descripcion = it }
+            }
+            item {
+                CampoTexto("Teléfono de contacto", telefono) { telefono = it }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                val mascota = Mascota(
+                    nombre = nombre,
+                    especie = especie,
+                    raza = raza,
+                    edad = edad,
+                    tamano = tamano,
+                    caracteristicas = caracteristicas,
+                    ubicacion = ubicacion,
+                    fecha = "Sin fecha",
+                    estado = estado,
+                    foto = "",
+                    telefono = telefono
+                )
+
+                val reporte = Reporte(
+                    id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                    mascota = mascota,
+                    tipo = estado,
+                    descripcion = descripcion,
+                    fechaPublicacion = "Hoy"
+                )
+
+                onPublicar(reporte)
+            },
+            enabled = nombre.isNotBlank() &&
+                    especie.isNotBlank() &&
+                    ubicacion.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Publicar reporte")
+        }
+
+        TextButton(
+            onClick = onRegresar,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Regresar al inicio")
+        }
+    }
+}
+
+@Composable
+fun CampoTexto(
+    etiqueta: String,
+    valor: String,
+    alCambiar: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = valor,
+        onValueChange = alCambiar,
+        label = { Text(etiqueta) },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true
+    )
+}
+
+@Composable
+fun PantallaPerfil(
+    nombre: String,
+    correo: String,
+    telefono: String,
+    onNombreChange: (String) -> Unit,
+    onCorreoChange: (String) -> Unit,
+    onTelefonoChange: (String) -> Unit,
+    onRegresar: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Mi perfil",
+            color = Morado,
+            fontSize = 27.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text("Información de la persona usuaria")
+
+        OutlinedTextField(
+            value = nombre,
+            onValueChange = onNombreChange,
+            label = { Text("Nombre") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = correo,
+            onValueChange = onCorreoChange,
+            label = { Text("Correo electrónico") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = telefono,
+            onValueChange = onTelefonoChange,
+            label = { Text("Teléfono") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onRegresar,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Regresar al inicio")
         }
     }
 }
