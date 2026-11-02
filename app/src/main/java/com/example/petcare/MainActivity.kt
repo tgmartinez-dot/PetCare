@@ -7,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,7 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.petcare.model.Mascota
+import com.example.petcare.model.Reporte
+import com.example.petcare.viewmodel.PetCareViewModel
 
 private val Morado = Color(0xFF813D91)
 private val Rosa = Color(0xFFF3E4F4)
@@ -45,47 +47,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-data class Mascota(
-    val nombre: String,
-    val ubicacion: String,
-    val descripcion: String,
-    val estado: String,
-    val foto: Uri?,
-    val telefono: String
-)
-
 @Composable
 fun PetCareApp() {
     var pantalla by remember { mutableStateOf("inicio") }
-
-    val mascotas = remember {
-        mutableStateListOf(
-            Mascota(
-                nombre = "Firulais",
-                ubicacion = "Coyoacán, CDMX",
-                descripcion = "Perrito café, pequeño.",
-                estado = "Perdido",
-                foto = null,
-                telefono = ""
-            ),
-            Mascota(
-                nombre = "Michi",
-                ubicacion = "Benito Juárez, CDMX",
-                descripcion = "Gatito amarillo.",
-                estado = "Encontrado",
-                foto = null,
-                telefono = ""
-            ),
-            Mascota(
-                nombre = "Luna",
-                ubicacion = "Iztapalapa, CDMX",
-                descripcion = "Perrita blanca con manchas.",
-                estado = "Perdido",
-                foto = null,
-                telefono = ""
-            )
-        )
-    }
+    val petCareViewModel: PetCareViewModel = viewModel()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -98,12 +63,15 @@ fun PetCareApp() {
             )
 
             "buscar" -> PantallaBuscar(
-                mascotas = mascotas,
+                reportes = petCareViewModel.reportes,
                 onRegresar = { pantalla = "inicio" }
             )
 
             "reportar" -> PantallaReportar(
-                mascotas = mascotas,
+                onPublicar = { reporte ->
+                    petCareViewModel.agregarReporte(reporte)
+                    pantalla = "buscar"
+                },
                 onRegresar = { pantalla = "inicio" }
             )
         }
@@ -142,9 +110,7 @@ fun PantallaInicio(
         Button(
             onClick = onBuscar,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Morado
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = Morado)
         ) {
             Text("Buscar mascota")
         }
@@ -154,9 +120,7 @@ fun PantallaInicio(
         Button(
             onClick = onReportar,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Morado
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = Morado)
         ) {
             Text("Reportar mascota")
         }
@@ -165,20 +129,21 @@ fun PantallaInicio(
 
 @Composable
 fun PantallaBuscar(
-    mascotas: List<Mascota>,
+    reportes: List<Reporte>,
     onRegresar: () -> Unit
 ) {
     var busqueda by remember { mutableStateOf("") }
     var filtro by remember { mutableStateOf("Todos") }
 
-    val resultados = mascotas.filter { mascota ->
+    val resultados = reportes.filter { reporte ->
+        val mascota = reporte.mascota
         val coincideTexto =
             mascota.nombre.contains(busqueda, ignoreCase = true) ||
                     mascota.ubicacion.contains(busqueda, ignoreCase = true) ||
                     mascota.descripcion.contains(busqueda, ignoreCase = true)
 
         val coincideEstado =
-            filtro == "Todos" || mascota.estado == filtro
+            filtro == "Todos" || reporte.tipo == filtro
 
         coincideTexto && coincideEstado
     }
@@ -195,10 +160,7 @@ fun PantallaBuscar(
             color = Morado
         )
 
-        Text(
-            text = "Buscar mascotas",
-            fontSize = 22.sp
-        )
+        Text(text = "Buscar mascotas", fontSize = 22.sp)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -242,8 +204,8 @@ fun PantallaBuscar(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(resultados) { mascota ->
-                    TarjetaMascota(mascota)
+                items(resultados) { reporte ->
+                    TarjetaMascota(reporte.mascota, reporte.tipo)
                 }
             }
         }
@@ -251,9 +213,7 @@ fun PantallaBuscar(
         Button(
             onClick = onRegresar,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Morado
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = Morado)
         ) {
             Text("Regresar al inicio")
         }
@@ -262,7 +222,7 @@ fun PantallaBuscar(
 
 @Composable
 fun PantallaReportar(
-    mascotas: SnapshotStateList<Mascota>,
+    onPublicar: (Reporte) -> Unit,
     onRegresar: () -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
@@ -350,9 +310,7 @@ fun PantallaReportar(
             supportingText = {
                 Text("Incluye el código de país; México es 52.")
             },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -362,9 +320,7 @@ fun PantallaReportar(
         Button(
             onClick = { selectorFoto.launch("image/*") },
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Morado
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = Morado)
         ) {
             Text("📷 Agregar fotografía")
         }
@@ -382,9 +338,7 @@ fun PantallaReportar(
                 contentScale = ContentScale.Crop
             )
 
-            TextButton(
-                onClick = { foto = null }
-            ) {
+            TextButton(onClick = { foto = null }) {
                 Text("Quitar fotografía")
             }
         }
@@ -393,39 +347,38 @@ fun PantallaReportar(
 
         Button(
             onClick = {
+                val telefonoLimpio = telefono.filter { it.isDigit() }
+
                 if (
                     nombre.isNotBlank() &&
                     ubicacion.isNotBlank() &&
                     descripcion.isNotBlank() &&
-                    telefono.filter { it.isDigit() }.length >= 10
+                    telefonoLimpio.length >= 10
                 ) {
-                    mascotas.add(
-                        0,
-                        Mascota(
-                            nombre = nombre.trim(),
-                            ubicacion = ubicacion.trim(),
-                            descripcion = descripcion.trim(),
-                            estado = estado,
-                            foto = foto,
-                            telefono = telefono.filter { it.isDigit() }
-                        )
+                    val mascota = Mascota(
+                        nombre = nombre.trim(),
+                        ubicacion = ubicacion.trim(),
+                        descripcion = descripcion.trim(),
+                        estado = estado,
+                        foto = foto?.toString() ?: "",
+                        telefono = telefonoLimpio
                     )
 
-                    nombre = ""
-                    ubicacion = ""
-                    descripcion = ""
-                    telefono = ""
-                    foto = null
-                    estado = "Perdido"
-                    mensaje = "¡Reporte publicado correctamente!"
+                    val reporte = Reporte(
+                        id = System.currentTimeMillis().toInt(),
+                        mascota = mascota,
+                        tipo = estado,
+                        descripcion = descripcion.trim(),
+                        fechaPublicacion = ""
+                    )
+
+                    onPublicar(reporte)
                 } else {
                     mensaje = "Completa los campos y verifica el teléfono."
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Morado
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = Morado)
         ) {
             Text("Publicar reporte")
         }
@@ -447,22 +400,21 @@ fun PantallaReportar(
 }
 
 @Composable
-fun TarjetaMascota(mascota: Mascota) {
+fun TarjetaMascota(
+    mascota: Mascota,
+    estadoReporte: String
+) {
     val contexto = LocalContext.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Rosa
-        )
+        colors = CardDefaults.cardColors(containerColor = Rosa)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            if (mascota.foto != null) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            if (mascota.foto.isNotBlank()) {
                 AsyncImage(
-                    model = mascota.foto,
+                    model = Uri.parse(mascota.foto),
                     contentDescription = "Fotografía de ${mascota.nombre}",
                     modifier = Modifier
                         .fillMaxWidth()
@@ -479,10 +431,7 @@ fun TarjetaMascota(mascota: Mascota) {
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🐾 Sin fotografía",
-                        color = Morado
-                    )
+                    Text(text = "🐾 Sin fotografía", color = Morado)
                 }
             }
 
@@ -496,7 +445,7 @@ fun TarjetaMascota(mascota: Mascota) {
             )
 
             Text("📍 ${mascota.ubicacion}")
-            Text("Estado: ${mascota.estado}")
+            Text("Estado: $estadoReporte")
             Text(mascota.descripcion)
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -504,7 +453,7 @@ fun TarjetaMascota(mascota: Mascota) {
             Button(
                 onClick = {
                     val numero = mascota.telefono.filter { it.isDigit() }
-                    val texto = if (mascota.estado == "Perdido") {
+                    val texto = if (estadoReporte == "Perdido") {
                         "Hola, vi el reporte de ${mascota.nombre} en PetCare y quiero ayudar."
                     } else {
                         "Hola, vi tu reporte de una mascota encontrada en PetCare. Quisiera más información."
@@ -514,17 +463,14 @@ fun TarjetaMascota(mascota: Mascota) {
                         "https://wa.me/$numero?text=${Uri.encode(texto)}"
                     )
 
-                    val intent = Intent(Intent.ACTION_VIEW, enlace)
-                    contexto.startActivity(intent)
+                    contexto.startActivity(Intent(Intent.ACTION_VIEW, enlace))
                 },
                 enabled = mascota.telefono.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Morado
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = Morado)
             ) {
                 Text(
-                    if (mascota.estado == "Perdido") {
+                    if (estadoReporte == "Perdido") {
                         "Contactar por WhatsApp"
                     } else {
                         "Reportar avistamiento"
